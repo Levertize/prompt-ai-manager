@@ -3,14 +3,15 @@ import { getAllPrompts, createPrompt } from '../api/promptApi';
 import PromptList from '../components/PromptList';
 import PromptForm from '../components/PromptForm';
 
+const CATEGORIES = ['All', 'Image', 'Text', 'Video'];
+
 const HomePage = () => {
   const [prompts, setPrompts] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [search, setSearch] = useState('');
+  const [activeCategory, setActiveCategory] = useState('All');
 
-  useEffect(() => {
-    fetchPrompts();
-  }, []);
+  useEffect(() => { fetchPrompts(); }, []);
 
   const fetchPrompts = async () => {
     const res = await getAllPrompts();
@@ -23,72 +24,84 @@ const HomePage = () => {
     setShowForm(false);
   };
 
-  const handleDelete = (id) => {
-    setPrompts(prev => prev.filter(p => p.id !== id));
-  };
+  const handleDelete = (id) => setPrompts(prev => prev.filter(p => p.id !== id));
 
-  const filtered = prompts.filter(p =>
-    p.title.toLowerCase().includes(search.toLowerCase()) ||
-    p.content.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = prompts.filter(p => {
+    const matchSearch = p.title.toLowerCase().includes(search.toLowerCase()) || p.content.toLowerCase().includes(search.toLowerCase());
+    const matchCat = activeCategory === 'All' || p.category?.toLowerCase() === activeCategory.toLowerCase();
+    return matchSearch && matchCat;
+  });
 
-  // Statistik
-  const modelCount = prompts.reduce((acc, p) => {
-    acc[p.model] = (acc[p.model] || 0) + 1;
-    return acc;
-  }, {});
+  const modelCount = prompts.reduce((acc, p) => { acc[p.model] = (acc[p.model] || 0) + 1; return acc; }, {});
+  const topModel = Object.entries(modelCount).sort((a,b)=>b[1]-a[1])[0];
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <h1 style={styles.title}>🧠 Prompt Manager</h1>
-        <button onClick={() => setShowForm(true)} style={styles.btnAdd}>+ Tambah Prompt</button>
-      </div>
-
-      {/* Statistik */}
-      <div style={styles.stats}>
-        <div style={styles.statCard}>
-          <span style={styles.statNum}>{prompts.length}</span>
-          <span style={styles.statLabel}>Total Prompt</span>
-        </div>
-        {Object.entries(modelCount).map(([model, count]) => (
-          <div key={model} style={styles.statCard}>
-            <span style={styles.statNum}>{count}</span>
-            <span style={styles.statLabel}>{model}</span>
+    <div style={s.page}>
+      <div style={s.container}>
+        <div style={s.topbar}>
+          <div style={s.logo}>
+            <div style={s.logoDot}></div>
+            <span style={s.logoText}>Prompt Manager</span>
           </div>
-        ))}
+          <button onClick={() => setShowForm(true)} style={s.btnNew}>+ New prompt</button>
+        </div>
+
+        <div style={s.stats}>
+          {[
+            { num: prompts.length, label: 'Total prompts' },
+            { num: prompts.filter(p=>p.category==='image').length, label: 'Image prompts' },
+            { num: prompts.filter(p=>p.category==='text').length, label: 'Text prompts' },
+            { num: topModel ? `${topModel[0]}` : '—', label: 'Top model', small: true },
+          ].map((s2, i) => (
+            <div key={i} style={s.statCard}>
+              <div style={{...s.statNum, fontSize: s2.small ? '14px' : '24px'}}>{s2.num}</div>
+              <div style={s.statLabel}>{s2.label}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={s.toolbar}>
+          <input
+            placeholder="Search prompts..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={s.search}
+          />
+          <div style={s.filters}>
+            {CATEGORIES.map(c => (
+              <button key={c} onClick={() => setActiveCategory(c)}
+                style={{...s.filterBtn, ...(activeCategory===c ? s.filterActive : {})}}>
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <PromptList prompts={filtered} onDelete={handleDelete} />
       </div>
 
-      {/* Search */}
-      <input
-        placeholder="🔍 Cari prompt..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        style={styles.search}
-      />
-
-      <PromptList prompts={filtered} onDelete={handleDelete} />
-
-      {showForm && (
-        <PromptForm
-          onSubmit={handleCreate}
-          onCancel={() => setShowForm(false)}
-        />
-      )}
+      {showForm && <PromptForm onSubmit={handleCreate} onCancel={() => setShowForm(false)} />}
     </div>
   );
 };
 
-const styles = {
-  container: { maxWidth: '800px', margin: '0 auto', padding: '2rem', fontFamily: 'sans-serif' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' },
-  title: { color: '#fff', margin: 0 },
-  btnAdd: { background: '#7c3aed', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' },
-  stats: { display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' },
-  statCard: { background: '#1e1e2e', border: '1px solid #2a2a3e', borderRadius: '10px', padding: '1rem 1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '100px' },
-  statNum: { color: '#a78bfa', fontSize: '28px', fontWeight: 'bold' },
-  statLabel: { color: '#888', fontSize: '12px' },
-  search: { width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #444', background: '#1e1e2e', color: '#fff', marginBottom: '1.5rem', fontSize: '14px', boxSizing: 'border-box' },
+const s = {
+  page: { minHeight:'100vh', background:'#080810', fontFamily:'sans-serif' },
+  container: { maxWidth:'960px', margin:'0 auto', padding:'28px 20px' },
+  topbar: { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'24px' },
+  logo: { display:'flex', alignItems:'center', gap:'8px' },
+  logoDot: { width:'8px', height:'8px', borderRadius:'50%', background:'#7c3aed' },
+  logoText: { fontSize:'15px', fontWeight:'500', color:'#e0e0e0' },
+  btnNew: { background:'#7c3aed', color:'#fff', border:'none', padding:'8px 16px', borderRadius:'8px', fontSize:'13px', cursor:'pointer' },
+  stats: { display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'10px', marginBottom:'20px' },
+  statCard: { background:'#0f0f17', border:'1px solid #1e1e2e', borderRadius:'10px', padding:'14px 16px' },
+  statNum: { fontWeight:'500', color:'#e0e0e0', marginBottom:'4px' },
+  statLabel: { fontSize:'11px', color:'#555' },
+  toolbar: { display:'flex', gap:'12px', alignItems:'center', marginBottom:'20px', flexWrap:'wrap' },
+  search: { flex:1, minWidth:'200px', padding:'8px 12px', borderRadius:'8px', border:'1px solid #1e1e2e', background:'#0f0f17', color:'#e0e0e0', fontSize:'13px', outline:'none' },
+  filters: { display:'flex', gap:'6px' },
+  filterBtn: { padding:'7px 14px', borderRadius:'8px', border:'1px solid #1e1e2e', background:'transparent', color:'#555', fontSize:'12px', cursor:'pointer' },
+  filterActive: { borderColor:'#7c3aed', color:'#a78bfa', background:'#7c3aed15' },
 };
 
 export default HomePage;
